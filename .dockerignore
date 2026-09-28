@@ -1,0 +1,16 @@
+.git
+.env
+__pycache__
+*.pyc
+.venv
+venv/
+env/
+data/checkpoints/*
+data/uploads/*
+!data/checkpoints/.gitkeep
+!data/uploads/.gitkeep
+node_modules
+.pytest_cache
+*.db
+mlruns/*
+!mlruns/.gitkeep

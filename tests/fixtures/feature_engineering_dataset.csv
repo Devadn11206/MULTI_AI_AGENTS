@@ -1,0 +1,13 @@
+CustomerID,Age,Gender,Tenure,MonthlyCharges,TotalCharges,City,Churn
+C001,25,Male,1,50.0,50.0,New York,Yes
+C002,30,Female,12,70.0,840.0,London,No
+C003,45,Male,24,90.0,2160.0,Paris,No
+C004,35,Female,6,60.0,360.0,New York,Yes
+C005,28,Male,3,55.0,165.0,Tokyo,Yes
+C006,200,Male,2,45.0,90.0,New York,Yes
+C007,40,Female,36,100.0,3600.0,London,No
+C008,33,Male,8,65.0,520.0,Paris,Yes
+C009,50,Female,48,110.0,5280.0,Tokyo,No
+C010,38,Male,18,80.0,,London,No
+C001,25,Male,1,50.0,50.0,New York,Yes
+C011,29,,10,58.0,580.0,Paris,No

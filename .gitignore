@@ -1,0 +1,41 @@
+# Environments
+.env
+.venv/
+venv/
+ENV/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+logs/
+reports/
+models/
+datasets/
+experiments/
+
+# Databases
+mlforge.db
+test.db
+
+# MLflow
+mlruns/*
+!mlruns/.gitkeep
+
+# Other
+checkpoints/
+*.log
+.pytest_cache/

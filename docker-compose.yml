@@ -1,0 +1,88 @@
+
+
+services:
+  mlforge-api:
+    build: .
+    container_name: mlforge_api
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_ENV=production
+      - DATABASE_URL=postgresql+psycopg2://mlforge:password@postgres:5432/mlforge
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - WORKSPACE_DIR=/app
+      # Pass through required secrets or set them in .env
+      # - GEMINI_API_KEY=${GEMINI_API_KEY}
+      # - GROQ_API_KEY=${GROQ_API_KEY}
+    env_file:
+      - .env
+    volumes:
+      - mlforge_data:/app/data
+      - .:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - mlforge_net
+    command: >
+      bash -c "alembic upgrade head && uvicorn api.main:app --host 0.0.0.0 --port 8000"
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: mlforge_postgres
+    environment:
+      POSTGRES_USER: mlforge
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: mlforge
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mlforge"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mlforge_net
+
+  mlflow:
+    image: python:3.10-slim-bookworm
+    container_name: mlforge_mlflow
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow_data:/mlruns
+    environment:
+      - BACKEND_STORE_URI=sqlite:///mlruns/mlflow.db
+      - DEFAULT_ARTIFACT_ROOT=/mlruns
+    command: >
+      bash -c "pip install mlflow && mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:////mlruns/mlflow.db --default-artifact-root /mlruns"
+    networks:
+      - mlforge_net
+
+  streamlit:
+    build: .
+    container_name: mlforge_streamlit
+    ports:
+      - "8501:8501"
+    environment:
+      - MLFORGE_API_URL=http://mlforge-api:8000
+      - WORKSPACE_DIR=/app
+    volumes:
+      - mlforge_data:/app/data
+      - .:/app
+    depends_on:
+      - mlforge-api
+    networks:
+      - mlforge_net
+    command: streamlit run ui/app.py --server.address 0.0.0.0 --server.enableXsrfProtection false --server.enableCORS false
+
+volumes:
+  postgres_data:
+  mlforge_data:
+  mlflow_data:
+
+networks:
+  mlforge_net:
+    driver: bridge
