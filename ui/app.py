@@ -327,7 +327,9 @@ def main():
                     if st.button("Resume Workflow", key=f"resume_{wf.get('workflow_id')}"):
                         APIClient.resume_workflow(wf.get("workflow_id"))
                         st.session_state["workflow_id"] = wf.get("workflow_id")
+                        st.session_state["result"] = None
                         st.rerun()
+
                         
     else:
         st.sidebar.error("❌ Backend: Unavailable")
@@ -379,133 +381,137 @@ def main():
                 import pandas as pd
                 st.dataframe(pd.DataFrame(preview), width="stretch")
 
-    if not st.session_state.get("dataset_id"):
+    if not st.session_state.get("dataset_id") and not st.session_state.get("workflow_id"):
         st.info("⬆️ Upload a dataset to begin.")
         return
 
-    # ─── Step 2: Objective ───────────────────────────────────────────────────
-    st.markdown("---")
-    st.markdown("## 2. Objective")
-    objective = st.text_input(
-        "What should MLForge predict?",
-        placeholder="e.g. Predict customer churn",
-        key="input_objective"
-    )
 
-    # ─── Step 3: Task Type ───────────────────────────────────────────────────
-    st.markdown("---")
-    st.markdown("## 3. Task Type")
-    task_type = st.selectbox(
-        "Task Type",
-        options=["auto", "classification", "regression"],
-        index=0,
-        format_func=lambda x: x.capitalize(),
-        key="input_task_type",
-        help="Choose Auto to let MLForge determine the ML problem type automatically."
-    )
-
-    # ─── Step 4: Target Column ───────────────────────────────────────────────
-    st.markdown("---")
-    st.markdown("## 4. Target Column")
-
-    columns = col_info.get("columns", []) if col_info else []
-    dtypes = col_info.get("dtypes", {}) if col_info else {}
-
-    if not columns:
-        st.error("No columns found in dataset. Please re-upload a valid CSV.")
-        return
-
-    # Auto-suggest target
-    suggested = _suggest_target(columns)
-    default_idx = columns.index(suggested) if suggested in columns else len(columns) - 1
-
-    target_column = st.selectbox(
-        "Target Column",
-        options=columns,
-        index=default_idx,
-        key="input_target_col",
-        help="Select the variable MLForge should predict."
-    )
-
-    # Auto-suggestion annotation
-    if suggested and target_column == suggested:
-        st.caption(f"💡 Auto-suggested based on column name heuristics: **{suggested}**")
-
-    # ID-column warning
-    if _is_id_column(target_column):
-        st.warning(
-            f"⚠️ **'{target_column}'** appears to be an identifier column. "
-            "Using it as the target may produce an invalid ML task. You can still proceed."
+    # Steps 2 to 6 are for configuring a new workflow run
+    if st.session_state.get("dataset_id"):
+        # ─── Step 2: Objective ───────────────────────────────────────────────────
+        st.markdown("---")
+        st.markdown("## 2. Objective")
+        objective = st.text_input(
+            "What should MLForge predict?",
+            placeholder="e.g. Predict customer churn",
+            key="input_objective"
         )
 
-    # Regression + categorical target warning
-    col_dtype = dtypes.get(target_column, "")
-    target_is_numeric = "int" in col_dtype or "float" in col_dtype
-    if task_type == "regression" and not target_is_numeric:
-        st.error(
-            f"❌ Regression requires a **numerical target column**, "
-            f"but **'{target_column}'** has dtype `{col_dtype}`. "
-            "Please choose a numeric column or change the Task Type."
+        # ─── Step 3: Task Type ───────────────────────────────────────────────────
+        st.markdown("---")
+        st.markdown("## 3. Task Type")
+        task_type = st.selectbox(
+            "Task Type",
+            options=["auto", "classification", "regression"],
+            index=0,
+            format_func=lambda x: x.capitalize(),
+            key="input_task_type",
+            help="Choose Auto to let MLForge determine the ML problem type automatically."
         )
-        # Block workflow
-        return
 
-    # ─── Step 5: Primary Metric ──────────────────────────────────────────────
-    st.markdown("---")
-    st.markdown("## 5. Primary Metric")
+        # ─── Step 4: Target Column ───────────────────────────────────────────────
+        st.markdown("---")
+        st.markdown("## 4. Target Column")
 
-    valid_metrics = _get_metrics_for_task(task_type)
-    # Carry over previous selection only if it's still valid
-    prev_metric = st.session_state.get("_last_metric", METRIC_DEFAULTS[task_type])
-    safe_metric = _safe_default_metric(task_type, prev_metric)
-    metric_idx = valid_metrics.index(safe_metric) if safe_metric in valid_metrics else 0
+        columns = col_info.get("columns", []) if col_info else []
+        dtypes = col_info.get("dtypes", {}) if col_info else {}
 
-    priority = st.selectbox(
-        "Primary Metric",
-        options=valid_metrics,
-        index=metric_idx,
-        format_func=lambda x: x.upper() if x != "auto" else "Auto",
-        key=f"input_priority_{task_type}",   # key changes with task_type → forces reset
-        help="Metric used to prioritize model selection and evaluation."
-    )
-    st.session_state["_last_metric"] = priority
+        if not columns:
+            st.error("No columns found in dataset. Please re-upload a valid CSV.")
+            return
 
-    # Show which metrics are available as a hint
-    if task_type == "classification":
-        st.caption("Classification metrics: Accuracy · Precision · Recall · F1 · ROC-AUC")
-    elif task_type == "regression":
-        st.caption("Regression metrics: RMSE · MAE · MSE · R²")
-    else:
-        st.caption("Auto: MLForge selects the appropriate metric after determining the task type.")
+        # Auto-suggest target
+        suggested = _suggest_target(columns)
+        default_idx = columns.index(suggested) if suggested in columns else len(columns) - 1
 
-    # ─── Step 6: RUN MLFORGE ─────────────────────────────────────────────────
-    st.markdown("---")
-    run_disabled = not objective or not target_column
-    if run_disabled:
-        st.caption("⬅️ Fill in the Objective and select a Target Column to begin.")
+        target_column = st.selectbox(
+            "Target Column",
+            options=columns,
+            index=default_idx,
+            key="input_target_col",
+            help="Select the variable MLForge should predict."
+        )
 
-    if st.button("🚀 RUN MLFORGE", disabled=run_disabled, type="primary", key="btn_run"):
-        payload_log = {
-            "dataset_id": st.session_state["dataset_id"],
-            "objective": objective,
-            "task_type": task_type,
-            "target_column": target_column,
-            "priority": priority,
-        }
-        st.caption(f"📋 Request payload: `{payload_log}`")
-        try:
-            res = APIClient.create_workflow(
-                dataset_id=st.session_state["dataset_id"],
-                objective=objective,
-                priority=priority,
-                target_column=target_column,
-                task_type=task_type,
+        # Auto-suggestion annotation
+        if suggested and target_column == suggested:
+            st.caption(f"💡 Auto-suggested based on column name heuristics: **{suggested}**")
+
+        # ID-column warning
+        if _is_id_column(target_column):
+            st.warning(
+                f"⚠️ **'{target_column}'** appears to be an identifier column. "
+                "Using it as the target may produce an invalid ML task. You can still proceed."
             )
-            st.session_state["workflow_id"] = res["workflow_id"]
-            st.session_state["result"] = None
-            st.success(f"✅ Workflow started! ID: `{res['workflow_id']}`")
-        except Exception as e:
-            st.error(f"Failed to start workflow: {e}")
+
+        # Regression + categorical target warning
+        col_dtype = dtypes.get(target_column, "")
+        target_is_numeric = "int" in col_dtype or "float" in col_dtype
+        if task_type == "regression" and not target_is_numeric:
+            st.error(
+                f"❌ Regression requires a **numerical target column**, "
+                f"but **'{target_column}'** has dtype `{col_dtype}`. "
+                "Please choose a numeric column or change the Task Type."
+            )
+            # Block workflow creation
+            return
+
+        # ─── Step 5: Primary Metric ──────────────────────────────────────────────
+        st.markdown("---")
+        st.markdown("## 5. Primary Metric")
+
+        valid_metrics = _get_metrics_for_task(task_type)
+        prev_metric = st.session_state.get("_last_metric", METRIC_DEFAULTS[task_type])
+        safe_metric = _safe_default_metric(task_type, prev_metric)
+        metric_idx = valid_metrics.index(safe_metric) if safe_metric in valid_metrics else 0
+
+        priority = st.selectbox(
+            "Primary Metric",
+            options=valid_metrics,
+            index=metric_idx,
+            format_func=lambda x: x.upper() if x != "auto" else "Auto",
+            key=f"input_priority_{task_type}",
+            help="Metric used to prioritize model selection and evaluation."
+        )
+        st.session_state["_last_metric"] = priority
+
+        if task_type == "classification":
+            st.caption("Classification metrics: Accuracy · Precision · Recall · F1 · ROC-AUC")
+        elif task_type == "regression":
+            st.caption("Regression metrics: RMSE · MAE · MSE · R²")
+        else:
+            st.caption("Auto: MLForge selects the appropriate metric after determining the task type.")
+
+        # ─── Step 6: RUN MLFORGE ─────────────────────────────────────────────────
+        st.markdown("---")
+        run_disabled = not objective or not target_column
+        if run_disabled:
+            st.caption("⬅️ Fill in the Objective and select a Target Column to begin.")
+
+        if st.button("🚀 RUN MLFORGE", disabled=run_disabled, type="primary", key="btn_run"):
+            payload_log = {
+                "dataset_id": st.session_state["dataset_id"],
+                "objective": objective,
+                "task_type": task_type,
+                "target_column": target_column,
+                "priority": priority,
+            }
+            st.caption(f"📋 Request payload: `{payload_log}`")
+            try:
+                res = APIClient.create_workflow(
+                    dataset_id=st.session_state["dataset_id"],
+                    objective=objective,
+                    priority=priority,
+                    target_column=target_column,
+                    task_type=task_type,
+                )
+                st.session_state["workflow_id"] = res["workflow_id"]
+                st.session_state["result"] = None
+                st.success(f"✅ Workflow started! ID: `{res['workflow_id']}`")
+            except Exception as e:
+                st.error(f"Failed to start workflow: {e}")
+    else:
+        task_type = "classification"
+
 
     # ─── Monitoring ──────────────────────────────────────────────────────────
     if st.session_state.get("workflow_id"):
