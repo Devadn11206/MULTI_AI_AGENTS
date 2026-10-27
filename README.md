@@ -15,19 +15,18 @@ MLForge is a multi-agent AI system that autonomously coordinates the machine lea
 Built to standardize and observe automated ML workflows, MLForge removes the black-box nature of AI-generated pipelines. By organizing strictly scoped AI agents around a central `AgentState`, the platform reliably crafts experiments without succumbing to token limits or hallucination drift.
 
 ## Features
-- **🤖 Multi-Agent Engine**: Modular agents specialized in distinct ML tasks.
-- **🎯 Intelligent Orchestration**: Dynamically plans and adjusts experiment routes.
-- **🧠 Shared Agent State**: Predictable knowledge transfer replacing messy transcripts.
-- **📊 Automated Dataset Analysis**: Profiles inputs and missing data autonomously.
-- **🧬 Feature Engineering**: Handles imputation, encoding, and scaling pipelines.
-- **🤖 Model Selection**: Proposes logical candidate models based on constraints.
-- **🏋️ Automated Training**: Executes and tracks training runs securely.
-- **📈 Evaluation**: Tests models against objective primary metrics (Accuracy, Recall, RMSE).
-- **🔄 Self-Correction**: Automatically intervenes and rewrites code when loops fail.
-- **👨‍⚖️ Independent Review**: Audits the pipeline for data leakage and overfitting.
-- **🛡️ Reliability & Fallback**: Switches from Gemini to Groq instantly if providers fail.
-- **📈 Observability**: Live UI tracing for full system transparency.
-- **🧪 Automated Evaluation**: Built-in CLI framework for programmatic benchmarking.
+- **🤖 Multi-Agent Engine**: Modular agents specialized in distinct ML tasks (Data, Feature Engineering, Modeling, Training, Evaluation, Debugger, Reviewer).
+- **🎯 Intelligent Orchestration**: Dynamically plans, executes, and self-corrects experiment routes.
+- **🧠 Shared Agent State**: Centralized state management ensuring clean context propagation without hallucination drift.
+- **📊 Automated Dataset Analysis**: Profiles inputs, dirty records, missing values, and column anomalies autonomously.
+- **🧬 Feature Engineering**: Handles dirty unit strings (e.g. `149 mmHg` $\rightarrow$ `149.0`), outlier label filtering, one-hot cardinality caps, scaling, and imputation.
+- **🤖 Model Selection & Training**: Proposes and trains candidate algorithms (RandomForest, GradientBoosting, XGBoost, LightGBM, LogisticRegression).
+- **📈 Evaluation & Target Thresholds**: Evaluates models against user-specified primary metrics and customizable target thresholds.
+- **🔄 Automated Self-Correction**: Automatically intervenes, diagnoses training failures, and retries with tuned hyperparameters and preprocessed data.
+- **👨‍⚖️ Independent Review**: Audits the pipeline against data leakage, metric anomalies, and overfitting before deployment approval.
+- **🛡️ Provider Fallbacks & Reliability**: Transparent multi-provider fallback (Gemini $\leftrightarrow$ Groq) with exponential backoff.
+- **📡 Real-Time Observability**: Live UI tracing stream capturing LLM calls, token usage, tool executions, and step-level statuses.
+- **🧪 Built-in Evaluation Dashboard**: Interactive benchmark interface and CLI harness to validate workflows and agent robustness.
 
 ## Architecture
 
@@ -49,142 +48,110 @@ graph TD
         FE --> MA[Model Agent]
         MA --> TA[Training Agent]
         TA --> EA[Evaluation Agent]
-        EA --> DB[Debugger Agent]
-        DB --> RV[Reviewer Agent]
+        EA --> Req{Target Met / Models Valid?}
+        
+        Req -->|Needs Fix| DB[Debugger Agent]
+        DB --> TA
+        
+        Req -->|Yes / Best Model| RV[Reviewer Agent]
     end
     
     MAS --> TS[Tool System]
-    TS --> Python[Python Executor]
-    TS --> Pandas[Dataset Inspection]
+    TS --> FeatureTransformer[Feature Transformer]
+    TS --> ModelTrainer[Model Trainer]
+    TS --> ModelEvaluator[Model Evaluator]
+    TS --> ReviewEngine[Review Engine]
     
-    MAS --> Persistence
-    Persistence --> PostgreSQL
-    Persistence --> MLflow
-```
-
-## Agent Workflow
-
-```mermaid
-graph TD
-    UT[User Task] --> O[Orchestrator]
-    O --> DA[Data Agent]
-    DA --> FA[Feature Agent]
-    FA --> MA[Model Agent]
-    MA --> TA[Training Agent]
-    TA --> EA[Evaluation Agent]
-    EA --> Req{Requirement Met?}
-    
-    Req -->|No| DB[Debugger]
-    DB --> TA
-    
-    Req -->|Yes| RV[Reviewer]
-    RV --> END[PASS]
+    MAS --> Persistence[SQLite / PostgreSQL & Event Store]
 ```
 
 ## Agents
 
 | Agent | Responsibility |
 |-------|----------------|
-| Orchestrator | Plans and coordinates workflow |
-| Data Agent | Profiles and analyzes datasets |
-| Feature Agent | Determines preprocessing and feature engineering |
-| Model Agent | Selects candidate ML models |
-| Training Agent | Trains candidate models |
-| Evaluation Agent | Evaluates models against requirements |
-| Debugger | Diagnoses failures and recommends corrections |
-| Reviewer | Independently reviews the final solution |
+| **Orchestrator** | Plans and coordinates workflow execution and self-correction cycles |
+| **Data Agent** | Profiles, analyzes schemas, and flags dirty or anomalous data |
+| **Feature Agent** | Plans preprocessing, encoding, scaling, unit-cleaning, and transformations |
+| **Model Agent** | Selects candidate ML models suited for the task type |
+| **Training Agent** | Trains baseline and candidate models using preprocessed splits |
+| **Evaluation Agent** | Evaluates models on test data against chosen metrics and thresholds |
+| **Debugger** | Diagnoses training/validation failures and plans corrective actions |
+| **Reviewer** | Independently reviews the best model, feature importances, and validation metrics |
 
-## Tool System
-MLForge agents interact with the OS through strictly constrained tools.
-- **Python Executor**: Executes generated scripts in a subprocess. Returns stdout/stderr.
-- **Dataset Inspector**: Allows safe profiling of `.csv` and `.xlsx` limits.
-- **File Reader**: Reads constraints and logs.
-
-## Reliability
-MLForge is designed for production stability. The internal `LLMManager` handles exponential backoff, rate limiting, and seamless failovers. 
-Example Fallback Path: 
-*Gemini → Failure → Retry → Failure → Groq → Continue*
-
-## Observability
-MLForge does not expose raw chain-of-thought to users. Instead, it exposes an **Agent Trace**, detailing events such as `workflow_id`, `agent_events`, `tool_events`, and `LLM_events`. This transparent logging ensures operators can debug the exact step a pipeline stalled on.
+## Observability & Live Tracing
+MLForge provides full transparency into multi-agent operations without exposing raw, cluttered chain-of-thought:
+- **Agent Events**: Step transitions, planning decisions, and review verdicts.
+- **LLM Traces**: Real-time provider selection (Gemini/Groq), prompt tokens, completion tokens, latency, and fallback attempts.
+- **Tool Traces**: Live execution status of dataset readers, feature transformers, training modules, and evaluation tools.
 
 ## Technology Stack
 
 | Layer | Technology |
 |-------|------------|
-| Language | Python 3.10 |
-| LLMs | Gemini + Groq (Llama 3) |
-| Backend | FastAPI |
-| Frontend | Streamlit |
-| ML | Scikit-learn, Pandas |
-| Database | PostgreSQL |
-| Tracking | MLflow |
-| Containers | Docker, Docker Compose |
-| Testing | Pytest |
+| Language | Python 3.10+ |
+| LLMs | Google Gemini + Groq (Llama 3 / Mixtral) |
+| Backend | FastAPI, SQLAlchemy, SQLite / PostgreSQL |
+| Frontend | Streamlit, Pandas |
+| ML & Data | Scikit-learn, XGBoost, LightGBM, NumPy |
+| Testing | Pytest, Built-in Evaluation Suite |
 
-## Installation
+## Installation & Setup
 
-**Prerequisites:** Python >= 3.9, Docker, API Keys.
+### Prerequisites
+- Python 3.10+
+- Gemini API Key and/or Groq API Key
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/yourusername/MLForge.git
-   cd MLForge
-   ```
-2. **Setup virtual environment:**
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate
-   pip install -r requirements.txt
-   ```
-3. **Configure Environment:**
-   Copy `.env.example` to `.env` and fill in your Gemini and Groq API keys.
-4. **Start Infrastructure:**
-   ```bash
-   docker compose up -d postgres mlflow
-   ```
-5. **Run Services:**
-   ```bash
-   uvicorn api.main:app --reload
-   streamlit run ui/app.py
-   ```
+### 1. Clone the repository
+```bash
+git clone https://github.com/Devadn11206/MULTI_AI_AGENTS.git
+cd MULTI_AI_AGENTS
+```
 
-## Quick Start
-1. Clone the repository and configure `.env`.
-2. Start the FastAPI and Streamlit services.
-3. Open the UI (`localhost:8501`).
-4. Upload `heart_disease_500.csv`.
-5. Enter Objective: "Predict whether a patient has heart disease."
-6. Select Target Column and set Metric to "Recall".
-7. Click "Run MLForge".
-8. Inspect the Agent Trace live as models train.
-9. Review the final approved model!
+### 2. Set up virtual environment
+```bash
+python -m venv .venv
+# Windows:
+.venv\Scripts\activate
+# Linux/macOS:
+source .venv/bin/activate
 
-## API
-Check `localhost:8000/docs` for the interactive OpenAPI documentation covering Authentication, Workflow creation, Trace endpoints, and Evaluation.
+pip install -r requirements.txt
+```
 
-## Testing
-Run the evaluation test harness programmatically:
+### 3. Configure Environment Variables
+Create a `.env` file in the project root:
+```env
+GEMINI_API_KEY=your_gemini_api_key_here
+GROQ_API_KEY=your_groq_api_key_here
+DATABASE_URL=sqlite:///./mlforge.db
+SECRET_KEY=mlforge_secret_key_change_in_production
+```
+
+### 4. Run the Platform
+In your first terminal (FastAPI backend):
+```powershell
+$env:PYTHONPATH="."
+uvicorn api.main:app --port 8000 --reload
+```
+
+In your second terminal (Streamlit UI):
+```powershell
+$env:PYTHONPATH="."
+streamlit run ui/app.py --server.port 8501
+```
+
+Open your browser to:
+- **Studio UI**: `http://localhost:8501`
+- **Interactive API Docs**: `http://127.0.0.1:8000/docs`
+
+## Evaluation & Benchmarking
+Run the automated evaluation suite via CLI:
 ```bash
 python -m evaluation.runner --mode mock
+# Or for live agent benchmark:
+python -m evaluation.runner --mode live
 ```
-Run unit tests:
-```bash
-pytest tests/
-```
-
-## Performance & Limitations
-See `docs/evaluation.md` for performance metrics.
-**Limitations:**
-- Model quality strictly depends on dataset quality.
-- Fallback success depends on the API availability of secondary LLM providers.
-- Training speed is dependent on underlying hardware capabilities.
-- Currently specialized for Tabular machine learning workloads.
-
-## Future Improvements
-- Kubernetes deployment templates.
-- Additional Computer Vision and NLP agent pipelines.
-- Distributed training workers.
+Or navigate to the **Evaluation** mode in the Streamlit web interface to inspect evaluation history and run benchmarks directly.
 
 ## License
-License decision required.
+MIT License
