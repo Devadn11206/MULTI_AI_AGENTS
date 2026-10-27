@@ -79,6 +79,20 @@ class FeatureTransformer:
         if plan.duplicate_handling == "remove":
             result = self._apply_remove_duplicates(result)
 
+        # 2b. Auto-clean dirty strings that are mostly numbers (e.g., '149 mmHg', '299.42 K', '317 mg/dL')
+        for col in result.columns:
+            if col == self.target_column or result[col].dtype != "object":
+                continue
+            non_na = result[col].dropna().astype(str).str.strip()
+            if len(non_na) == 0:
+                continue
+            # Check if majority of values contain extractable numeric values with units or formatting
+            extracted = non_na.str.extract(r"^([-+]?\d*\.?\d+)", expand=False)
+            valid_num_pct = extracted.notna().mean()
+            # If >80% parse as numbers and unique count is high (>15), convert to numeric
+            if valid_num_pct > 0.8 and non_na.nunique() > 15:
+                result[col] = pd.to_numeric(extracted, errors="coerce")
+
         # 3. Ordered operations from plan
         for op in plan.operations:
             try:
@@ -230,6 +244,10 @@ class FeatureTransformer:
         self._guard_target(cols, "one_hot_encode")
         new_cols: List[str] = []
         for col in cols:
+            # Safety check: if high cardinality (>30 unique categories), keep top 20 or skip
+            if df[col].nunique() > 30:
+                top_cats = df[col].value_counts().nlargest(20).index
+                df[col] = df[col].where(df[col].isin(top_cats), other="Other")
             dummies = pd.get_dummies(df[col], prefix=col, drop_first=False, dtype=int)
             new_cols.extend(dummies.columns.tolist())
             df = pd.concat([df.drop(columns=[col]), dummies], axis=1)

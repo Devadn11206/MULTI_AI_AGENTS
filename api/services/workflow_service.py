@@ -74,9 +74,11 @@ class WorkflowService:
             
             # Setup Core
             llm_provider = LLMManager()
+            llm_provider.set_trace_manager(tm)
             state_manager = AgentStateManager()
             state = state_manager.state
             state.workflow_id = workflow_id
+            state._trace_manager = tm
             
             from core.checkpoint_manager import CheckpointManager
             checkpoint_manager = CheckpointManager()
@@ -185,10 +187,12 @@ class WorkflowService:
             # Requirements
             requirements = []
             if req.priority:
+                # Use specified target_threshold if provided, or a high quality target (e.g., 0.85/0.90)
+                target_val = req.target_threshold if req.target_threshold is not None else 0.85
                 requirements.append({
                     "metric": req.priority,
                     "operator": ">=",
-                    "target_value": 0.5, # Default generic pass value
+                    "target_value": target_val,
                     "priority": "primary",
                     "dataset_split": "test"
                 })

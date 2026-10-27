@@ -115,7 +115,8 @@ class ModelEngineeringAgent(BaseAgent):
         response = self.llm_provider.generate(
             prompt=prompt,
             system_prompt=self.system_prompt,
-            response_schema=ExperimentPlan
+            response_schema=ExperimentPlan,
+            agent_name=self.name
         )
 
         try:

@@ -156,10 +156,16 @@ class FeatureEngineeringAgent(BaseAgent):
 
         # Step 6: Execute via FeatureTransformer (Python only)
         print("[FEAgent] Executing transformations...")
+        tm = getattr(self.state_manager.state, "_trace_manager", None) if hasattr(self.state_manager, "state") else None
+        ft_tool_id = tm.start_tool("feature_engineer", "feature_transformer") if tm else None
         transformer = FeatureTransformer(target_column=target_column)
         try:
             transformed_df, records = transformer.fit_transform(df, plan)
+            if tm and ft_tool_id:
+                tm.complete_tool("feature_engineer", "feature_transformer", f"Transformed {len(df)} rows into {transformed_df.shape[1]} features", parent_event_id=ft_tool_id)
         except Exception as e:
+            if tm and ft_tool_id:
+                tm.fail_tool("feature_engineer", "feature_transformer", str(e), parent_event_id=ft_tool_id)
             return self._error_result(f"Transformation failed: {e}", target_column)
 
         # Step 7: Post-transformation validation
@@ -280,6 +286,7 @@ class FeatureEngineeringAgent(BaseAgent):
                 prompt=prompt,
                 system_prompt=self.system_prompt,
                 response_schema=FeatureEngineeringPlan,
+                agent_name=self.name,
             )
             # Try parsing directly
             plan = FeatureEngineeringPlan.model_validate_json(resp.content)

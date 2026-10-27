@@ -11,6 +11,7 @@ class WorkflowCreateRequest(BaseModel):
     priority: Optional[str] = "recall"
     target_column: Optional[str] = None
     task_type: Optional[str] = "auto"
+    target_threshold: Optional[float] = None
     constraints: Optional[WorkflowConstraints] = WorkflowConstraints()
 
     @field_validator('objective')

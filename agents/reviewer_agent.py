@@ -22,7 +22,11 @@ class ReviewerAgent(BaseAgent):
         state = self.state_manager.get_state()
         
         # 1. Run deterministic review checks
+        tm = getattr(state, "_trace_manager", None)
+        rev_tool_id = tm.start_tool("reviewer", "review_engine") if tm else None
         review_result: ReviewResult = self.engine.run_review(state)
+        if tm and rev_tool_id:
+            tm.complete_tool("reviewer", "review_engine", f"Review status: {review_result.status}", parent_event_id=rev_tool_id)
         
         # 2. Get LLM summary and reasoning
         summary = self._generate_summary(review_result)
@@ -64,7 +68,8 @@ class ReviewerAgent(BaseAgent):
             response = self.llm_provider.generate(
                 prompt=prompt,
                 system_prompt=system_prompt,
-                response_schema=None
+                response_schema=None,
+                agent_name=self.name
             )
             return response.content.strip()
         except Exception as e:

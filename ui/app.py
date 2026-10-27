@@ -481,6 +481,16 @@ def main():
         else:
             st.caption("Auto: MLForge selects the appropriate metric after determining the task type.")
 
+        # Target threshold
+        target_threshold = st.number_input(
+            "Target Metric Threshold (Optional - e.g. 0.85, 0.90)",
+            min_value=0.0,
+            max_value=1.0,
+            value=0.85 if task_type != "regression" else 0.0,
+            step=0.05,
+            help="If models perform below this threshold, the self-correction debugger retrains and tunes models to cross or reach peak performance."
+        )
+
         # ─── Step 6: RUN MLFORGE ─────────────────────────────────────────────────
         st.markdown("---")
         run_disabled = not objective or not target_column
@@ -494,6 +504,7 @@ def main():
                 "task_type": task_type,
                 "target_column": target_column,
                 "priority": priority,
+                "target_threshold": target_threshold,
             }
             st.caption(f"📋 Request payload: `{payload_log}`")
             try:
@@ -503,6 +514,7 @@ def main():
                     priority=priority,
                     target_column=target_column,
                     task_type=task_type,
+                    target_threshold=target_threshold,
                 )
                 st.session_state["workflow_id"] = res["workflow_id"]
                 st.session_state["result"] = None

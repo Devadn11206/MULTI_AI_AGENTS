@@ -40,24 +40,36 @@ class EvaluationAgent(BaseAgent):
             X_test = df.drop(columns=[plan.target_column])
             y_test = df[plan.target_column]
             
+            tm = getattr(st, "_trace_manager", None)
             eval_results = []
             
             # Evaluate each model
             for tr in training_results:
                 if tr.status != "completed":
                     continue
-                res = self.evaluator.evaluate(
-                    training_result=tr,
-                    primary_metric=plan.primary_metric,
-                    X_test=X_test,
-                    y_test=y_test
-                )
-                eval_results.append(res)
+                e_tool_id = tm.start_tool("evaluation_agent", f"model_evaluator_{tr.model_id}") if tm else None
+                try:
+                    res = self.evaluator.evaluate(
+                        training_result=tr,
+                        primary_metric=plan.primary_metric,
+                        X_test=X_test,
+                        y_test=y_test
+                    )
+                    eval_results.append(res)
+                    if tm and e_tool_id:
+                        tm.complete_tool("evaluation_agent", f"model_evaluator_{tr.model_id}", f"Evaluated {tr.model_name}", parent_event_id=e_tool_id)
+                except Exception as eval_err:
+                    if tm and e_tool_id:
+                        tm.fail_tool("evaluation_agent", f"model_evaluator_{tr.model_id}", str(eval_err), parent_event_id=e_tool_id)
+                    raise eval_err
                 
             self.state_manager.state.evaluation_results = [r.model_dump() for r in eval_results]
             
             # Compare models
+            c_tool_id = tm.start_tool("evaluation_agent", "model_comparator") if tm else None
             comp = ModelComparator.compare(eval_results, plan.task_type, plan.primary_metric)
+            if tm and c_tool_id:
+                tm.complete_tool("evaluation_agent", "model_comparator", f"Best model: {comp.best_model}", parent_event_id=c_tool_id)
             self.state_manager.state.model_comparison = comp.model_dump()
             self.state_manager.state.best_model_id = comp.best_model
             

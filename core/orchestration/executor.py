@@ -274,7 +274,7 @@ class Executor:
             if s.step_id in skipped:
                 s.status = "skipped"
                 
-        if not plan.failed_steps and plan.status == "running":
+        if not plan.failed_steps and (plan.status == "running" or len(plan.completed_steps) > 0):
             plan.status = "completed"
                 
         return WorkflowResult(

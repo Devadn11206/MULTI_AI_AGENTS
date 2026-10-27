@@ -79,9 +79,15 @@ class DataAnalystAgent(BaseAgent):
         print(f"[DataAgent] Loading dataset: {dataset_path}")
 
         # Step 1: Load dataset
+        tm = getattr(self.state_manager.state, "_trace_manager", None) if hasattr(self.state_manager, "state") else None
+        t_id = tm.start_tool("data_analyst", "dataset_reader") if tm else None
         try:
             df = self._reader.execute(path=dataset_path)
+            if tm and t_id:
+                tm.complete_tool("data_analyst", "dataset_reader", f"Read {len(df)} rows, {len(df.columns)} columns", parent_event_id=t_id)
         except Exception as e:
+            if tm and t_id:
+                tm.fail_tool("data_analyst", "dataset_reader", str(e), parent_event_id=t_id)
             raise RuntimeError(f"DatasetReader error: {e}")
 
         ext = os.path.splitext(dataset_path)[1].lower().lstrip(".")
@@ -270,7 +276,7 @@ class DataAnalystAgent(BaseAgent):
         )
 
         try:
-            resp = self.llm_provider.generate(prompt=prompt, system_prompt=self.system_prompt)
+            resp = self.llm_provider.generate(prompt=prompt, system_prompt=self.system_prompt, agent_name=self.name)
             return resp.content
         except Exception as e:
             return f"[LLM observations unavailable: {e}]"

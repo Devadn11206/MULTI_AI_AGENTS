@@ -39,13 +39,22 @@ class TrainingAgent(BaseAgent):
                 raise FileNotFoundError(f"Dataset not found: {plan.dataset_reference}")
             df = pd.read_csv(plan.dataset_reference)
             
-            # Split data
-            X_train, X_test, y_train, y_test = DatasetSplitter.split(
-                df=df,
-                target_column=plan.target_column,
-                task_type=plan.task_type,
-                random_state=plan.random_state
-            )
+            tm = getattr(st, "_trace_manager", None)
+            tool_id = tm.start_tool("training_agent", "dataset_splitter") if tm else None
+            try:
+                # Split data
+                X_train, X_test, y_train, y_test = DatasetSplitter.split(
+                    df=df,
+                    target_column=plan.target_column,
+                    task_type=plan.task_type,
+                    random_state=plan.random_state
+                )
+                if tm and tool_id:
+                    tm.complete_tool("training_agent", "dataset_splitter", f"Split data: train={len(X_train)}, test={len(X_test)}", parent_event_id=tool_id)
+            except Exception as split_err:
+                if tm and tool_id:
+                    tm.fail_tool("training_agent", "dataset_splitter", str(split_err), parent_event_id=tool_id)
+                raise split_err
             
             # Save test set for EvaluationAgent
             test_path = f"artifacts/experiments/{plan.experiment_id}_test.csv"
@@ -59,6 +68,7 @@ class TrainingAgent(BaseAgent):
             # Train each model
             results = []
             for cand in plan.candidate_models:
+                m_tool_id = tm.start_tool("training_agent", f"model_trainer_{cand.model_id}") if tm else None
                 res = self.trainer.train(
                     experiment_id=plan.experiment_id,
                     model_id=cand.model_id,
@@ -69,6 +79,11 @@ class TrainingAgent(BaseAgent):
                     X_test=X_test,
                     random_state=plan.random_state
                 )
+                if tm and m_tool_id:
+                    if res.status == "completed":
+                        tm.complete_tool("training_agent", f"model_trainer_{cand.model_id}", f"Trained {cand.model_name} in {res.training_time_seconds}s", parent_event_id=m_tool_id)
+                    else:
+                        tm.fail_tool("training_agent", f"model_trainer_{cand.model_id}", str(res.error), parent_event_id=m_tool_id)
                 results.append(res.model_dump())
                 
             # Store in state

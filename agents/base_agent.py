@@ -14,7 +14,7 @@ class BaseAgent(ABC):
         
     def run(self, user_input: str) -> str:
         try:
-            resp = self.llm_provider.generate(prompt=user_input, system_prompt=self.system_prompt)
+            resp = self.llm_provider.generate(prompt=user_input, system_prompt=self.system_prompt, agent_name=self.name)
             return resp.content
         except Exception as e:
             return f"Agent {self.name} encountered an error: {e}"

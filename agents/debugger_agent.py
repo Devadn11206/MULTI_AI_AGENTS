@@ -75,7 +75,8 @@ Schema for DebugRecommendation:
         response = self.llm_provider.generate(
             prompt=prompt,
             system_prompt=system_prompt,
-            response_schema=None # Assuming no explicit schema passed here, using string response
+            response_schema=None,
+            agent_name=self.name
         )
         
         try:

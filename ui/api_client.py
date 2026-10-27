@@ -67,7 +67,8 @@ class APIClient:
         objective: str,
         priority: str,
         target_column: str = None,
-        task_type: str = "auto"
+        task_type: str = "auto",
+        target_threshold: float = None
     ):
         url = f"{API_URL}/workflows"
         payload = {
@@ -76,6 +77,7 @@ class APIClient:
             "priority": priority,
             "target_column": target_column,
             "task_type": task_type,
+            "target_threshold": target_threshold,
         }
         r = requests.post(url, json=payload, headers=APIClient._get_headers())
         r.raise_for_status()

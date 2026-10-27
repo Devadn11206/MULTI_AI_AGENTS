@@ -38,6 +38,7 @@ class APIManager:
             raise e
 
     def execute_with_fallback(self, messages: List[Dict[str, Any]], max_tokens: Optional[int], temperature: Optional[float], response_schema: Optional[Any] = None, agent_name: str = "unknown", trace_manager=None) -> LLMResponse:
+        settings = get_settings()
         # Try primary
         primary = self.provider_manager.primary_name
         last_error = None
@@ -46,15 +47,14 @@ class APIManager:
             try:
                 req_ev_id = None
                 if trace_manager:
-                    from config.settings import get_settings
-                    req_ev_id = trace_manager.record_llm_request(
-                        agent_name, primary, get_settings().GEMINI_MODEL if primary == "gemini" else get_settings().GROQ_MODEL
-                    )
+                    model_name = settings.GEMINI_MODEL if primary == "gemini" else settings.GROQ_MODEL
+                    req_ev_id = trace_manager.record_llm_request(agent_name, primary, model_name)
                 res = self.call_provider(primary, messages, max_tokens, temperature, response_schema)
                 if trace_manager:
+                    model_name = settings.GEMINI_MODEL if primary == "gemini" else settings.GROQ_MODEL
                     trace_manager.record_llm_response(
                         agent_name, primary,
-                        get_settings().GEMINI_MODEL if primary == "gemini" else get_settings().GROQ_MODEL,
+                        model_name,
                         parent_event_id=req_ev_id,
                         metadata={"total_tokens": res.total_tokens},
                     )
@@ -62,7 +62,6 @@ class APIManager:
             except Exception as e:
                 last_error = e
                 if trace_manager:
-                    from config.settings import get_settings
                     trace_manager.record_llm_retry(
                         agent_name, primary, attempt=1, reason=str(e)[:200]
                     )
@@ -72,17 +71,16 @@ class APIManager:
         for fallback in self.provider_manager.fallback_names:
             if self.provider_manager.is_provider_available(fallback):
                 try:
+                    fb_model = settings.GROQ_MODEL if fallback == "groq" else fallback
                     if trace_manager:
                         trace_manager.record_llm_fallback(agent_name, primary, fallback)
-                        req_ev_id = trace_manager.record_llm_request(
-                            agent_name, fallback, get_settings().GROQ_MODEL if fallback == "groq" else fallback
-                        )
+                        req_ev_id = trace_manager.record_llm_request(agent_name, fallback, fb_model)
                     res = self.call_provider(fallback, messages, max_tokens, temperature, response_schema)
                     res.fallback_used = True
                     if trace_manager:
                         trace_manager.record_llm_response(
                             agent_name, fallback,
-                            get_settings().GROQ_MODEL if fallback == "groq" else fallback,
+                            fb_model,
                             parent_event_id=req_ev_id,
                         )
                     return res
@@ -109,6 +107,10 @@ class LLMManager:
             "groq": {"calls": 0, "successes": 0, "failures": 0},
             "fallbacks": 0
         }
+        self.trace_manager = None
+
+    def set_trace_manager(self, tm):
+        self.trace_manager = tm
 
     def generate(self, prompt: str, system_prompt: Optional[str] = None, response_schema: Optional[Any] = None, agent_name: str = "unknown", max_tokens: Optional[int] = None, temperature: Optional[float] = None) -> LLMResponse:
         # Check Agent Budget
@@ -127,7 +129,9 @@ class LLMManager:
                 messages=messages,
                 max_tokens=max_t,
                 temperature=temperature,
-                response_schema=response_schema
+                response_schema=response_schema,
+                agent_name=agent_name,
+                trace_manager=self.trace_manager
             )
             
             # Track Usage
