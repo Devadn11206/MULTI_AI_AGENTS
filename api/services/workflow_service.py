@@ -275,17 +275,29 @@ class WorkflowService:
             from core.database import SessionLocal
             from repositories.repository import Repository
             
-            best_model_name = "unknown"
-            if getattr(state, "model_comparison", None):
-                best_model_name = state.model_comparison.get("best_model", "unknown_model")
-                parameters = state.evaluation_results[-1].get("parameters", {}) if state.evaluation_results else {}
-                log_experiment_to_db_and_mlflow(
-                    workflow_id=workflow_id,
-                    model_name=best_model_name,
-                    task_type=result_payload["task_type"],
-                    metrics=best_metrics,
-                    parameters=parameters
-                )
+            best_model_name = None
+            if getattr(state, "model_comparison", None) and isinstance(state.model_comparison, dict):
+                best_model_name = state.model_comparison.get("best_model")
+            if not best_model_name and getattr(state, "best_model_id", None):
+                best_model_name = state.best_model_id
+            if not best_model_name and getattr(state, "evaluation_results", []):
+                best_model_name = state.evaluation_results[-1].get("model_name") or state.evaluation_results[-1].get("model_id")
+            if not best_model_name and getattr(state, "experiment_plan", None) and isinstance(state.experiment_plan, dict):
+                candidates = state.experiment_plan.get("candidate_models", [])
+                if candidates and isinstance(candidates, list) and len(candidates) > 0:
+                    best_model_name = candidates[0].get("model_name") or candidates[0].get("model_id")
+            if not best_model_name:
+                best_model_name = "best_model"
+
+            parameters = state.evaluation_results[-1].get("parameters", {}) if state.evaluation_results else {}
+            log_experiment_to_db_and_mlflow(
+                workflow_id=workflow_id,
+                model_name=best_model_name,
+                task_type=result_payload["task_type"],
+                metrics=best_metrics,
+                parameters=parameters
+            )
+
             
             db = SessionLocal()
             try:
@@ -509,17 +521,21 @@ class WorkflowService:
             from core.database import SessionLocal
             from repositories.repository import Repository
             
-            best_model_name = "unknown"
+            best_model_name = None
             if state_manager.state.evaluation_results:
-                best_model_name = state_manager.state.evaluation_results[-1].get("model", "unknown_model")
-                parameters = state_manager.state.evaluation_results[-1].get("parameters", {})
-                log_experiment_to_db_and_mlflow(
-                    workflow_id=workflow_id,
-                    model_name=best_model_name,
-                    task_type=result_payload["task_type"],
-                    metrics=best_metrics,
-                    parameters=parameters
-                )
+                last_eval = state_manager.state.evaluation_results[-1]
+                best_model_name = last_eval.get("model_name") or last_eval.get("model_id") or last_eval.get("model")
+            if not best_model_name:
+                best_model_name = "best_model"
+            parameters = state_manager.state.evaluation_results[-1].get("parameters", {}) if state_manager.state.evaluation_results else {}
+            log_experiment_to_db_and_mlflow(
+                workflow_id=workflow_id,
+                model_name=best_model_name,
+                task_type=result_payload["task_type"],
+                metrics=best_metrics,
+                parameters=parameters
+            )
+
             
             db = SessionLocal()
             try:
