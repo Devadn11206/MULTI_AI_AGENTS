@@ -23,7 +23,9 @@ class Executor:
     def execute_plan(self, plan: WorkflowPlan) -> WorkflowResult:
         plan.status = "running"
         iterations = 0
-        max_iter = getattr(self.settings, "MAX_WORKFLOW_ITERATIONS", 3)
+        # Allow enough iterations to execute each step plus retries
+        cfg_max = getattr(self.settings, "MAX_WORKFLOW_ITERATIONS", 3)
+        max_iter = max(cfg_max, len(plan.steps) * 3, 15)
         
         while plan.status == "running" and iterations < max_iter:
             iterations += 1

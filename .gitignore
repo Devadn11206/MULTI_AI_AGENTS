@@ -23,9 +23,15 @@ Thumbs.db
 # Project specific
 logs/
 reports/
-models/
 datasets/
 experiments/
+data/eval/
+data/processed/
+data/uploads/
+data/raw/
+*.joblib
+*.pkl
+
 
 # Databases
 mlforge.db

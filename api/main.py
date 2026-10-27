@@ -21,6 +21,15 @@ app = FastAPI(
 # Configure CORS
 origins = [origin.strip() for origin in settings.CORS_ORIGINS.split(",") if origin.strip()]
 
+@app.on_event("startup")
+def startup_event():
+    from core.database import Base, engine
+    import models.domain
+    import observability.db_model
+    import evaluation.db_models
+    Base.metadata.create_all(bind=engine)
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
