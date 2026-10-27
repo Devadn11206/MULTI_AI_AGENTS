@@ -37,8 +37,13 @@ class EvaluationAgent(BaseAgent):
         try:
             # Load test data
             df = pd.read_csv(st.test_dataset_path)
-            X_test = df.drop(columns=[plan.target_column])
-            y_test = df[plan.target_column]
+            target_col = plan.target_column
+            if target_col not in df.columns:
+                col_map = {c.strip().lower(): c for c in df.columns}
+                if target_col.strip().lower() in col_map:
+                    target_col = col_map[target_col.strip().lower()]
+            X_test = df.drop(columns=[target_col])
+            y_test = df[target_col]
             
             tm = getattr(st, "_trace_manager", None)
             eval_results = []

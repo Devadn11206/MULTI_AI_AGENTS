@@ -14,11 +14,18 @@ class DatasetSplitter:
         random_state: int = 42
     ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
         
-        if target_column not in df.columns:
-            raise ValueError(f"Target column '{target_column}' not found in dataset.")
+        actual_target = target_column
+        if actual_target not in df.columns:
+            # Try stripped / lowercase matching
+            col_map = {c.strip().lower(): c for c in df.columns}
+            target_key = target_column.strip().lower()
+            if target_key in col_map:
+                actual_target = col_map[target_key]
+            else:
+                raise ValueError(f"Target column '{target_column}' not found in dataset. Available: {list(df.columns)}")
             
-        X = df.drop(columns=[target_column])
-        y = df[target_column]
+        X = df.drop(columns=[actual_target])
+        y = df[actual_target]
         
         stratify = None
         if task_type in ["binary_classification", "multiclass_classification"]:

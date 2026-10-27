@@ -60,7 +60,8 @@ class TrainingAgent(BaseAgent):
             test_path = f"artifacts/experiments/{plan.experiment_id}_test.csv"
             os.makedirs("artifacts/experiments", exist_ok=True)
             test_df = X_test.copy()
-            test_df[plan.target_column] = y_test
+            target_name = plan.target_column if plan.target_column in df.columns else y_test.name
+            test_df[target_name] = y_test
             test_df.to_csv(test_path, index=False)
             
             st.test_dataset_path = test_path
