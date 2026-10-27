@@ -21,10 +21,7 @@ def render_evaluation_dashboard():
     st.markdown("### Evaluation History")
     
     try:
-        # We would normally get from API, but we can hit DB directly or through requests
-        import requests
-        res = requests.get(f"{APIClient.BASE_URL}/evaluations")
-        runs = res.json() if res.status_code == 200 else []
+        runs = APIClient.get_evaluations()
     except Exception as e:
         st.error(f"Failed to fetch evaluations: {e}")
         runs = []

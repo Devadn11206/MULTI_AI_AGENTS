@@ -3,6 +3,15 @@ from ui.config import API_URL
 import streamlit as st
 
 class APIClient:
+    BASE_URL = API_URL
+
+    @staticmethod
+    def get_evaluations(limit: int = 100):
+        url = f"{API_URL}/evaluations?limit={limit}"
+        r = requests.get(url, timeout=10, headers=APIClient._get_headers())
+        if r.status_code == 200:
+            return r.json()
+        return []
     @staticmethod
     def _get_headers():
         headers = {}
