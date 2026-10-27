@@ -42,10 +42,24 @@ class TrainingAgent(BaseAgent):
             tm = getattr(st, "_trace_manager", None)
             tool_id = tm.start_tool("training_agent", "dataset_splitter") if tm else None
             try:
+                # Clean target column in classification if corrupted with rare noise classes (e.g. -1, 4)
+                target_col = plan.target_column if plan.target_column in df.columns else None
+                if not target_col:
+                    col_map = {c.strip().lower(): c for c in df.columns}
+                    target_col = col_map.get(plan.target_column.strip().lower())
+                
+                if target_col and "classification" in plan.task_type and pd.api.types.is_numeric_dtype(df[target_col]):
+                    counts = df[target_col].value_counts()
+                    major_classes = counts[counts >= 5].index
+                    if 1 < len(major_classes) <= 10:
+                        rare_mask = ~df[target_col].isin(major_classes)
+                        if rare_mask.sum() > 0 and rare_mask.sum() < len(df) * 0.05:
+                            df = df[~rare_mask].copy()
+
                 # Split data
                 X_train, X_test, y_train, y_test = DatasetSplitter.split(
                     df=df,
-                    target_column=plan.target_column,
+                    target_column=target_col or plan.target_column,
                     task_type=plan.task_type,
                     random_state=plan.random_state
                 )

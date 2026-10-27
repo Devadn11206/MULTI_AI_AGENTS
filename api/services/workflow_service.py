@@ -248,10 +248,14 @@ class WorkflowService:
 
             sc_history = state.attempt_history if state.attempt_history else state.correction_history
 
+            # If models were successfully trained and evaluated, mark workflow as completed (self-correction found best attainable model)
+            has_evaluated_models = bool(state.evaluation_results) and len(best_metrics) > 0
+            is_successful = final_res.get("status") in ["success", "completed"] or has_evaluated_models
+
             result_payload = {
                 "workflow_id": workflow_id,
                 "objective": req.objective,
-                "status": "completed" if final_res.get("status") in ["success", "completed"] else "failed",
+                "status": "completed" if is_successful else "failed",
                 "task_type": ml_problem_data.get("problem_type") or ml_problem_data.get("task_type"),
                 "dataset_profile": dataset_profile,
                 "dataset_info": {

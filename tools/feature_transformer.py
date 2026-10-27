@@ -93,6 +93,18 @@ class FeatureTransformer:
             if valid_num_pct > 0.8 and non_na.nunique() > 15:
                 result[col] = pd.to_numeric(extracted, errors="coerce")
 
+        # 2c. Clean target column if discrete labels have corruptions/anomalies (e.g. -1 or 4 with count=1)
+        target_col = self.target_column
+        if target_col in result.columns and pd.api.types.is_numeric_dtype(result[target_col]):
+            counts = result[target_col].value_counts()
+            # If target has a couple main classes (e.g. >99% in {0, 1}) and tiny corruptions (< 5 occurrences)
+            major_classes = counts[counts >= 5].index
+            if 1 < len(major_classes) <= 10:
+                rare_mask = ~result[target_col].isin(major_classes)
+                if rare_mask.sum() > 0 and rare_mask.sum() < len(result) * 0.05:
+                    # Filter out corrupt label rows
+                    result = result[~rare_mask].copy()
+
         # 3. Ordered operations from plan
         for op in plan.operations:
             try:
