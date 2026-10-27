@@ -43,5 +43,6 @@ mlruns/*
 
 # Other
 checkpoints/
+artifacts/
 *.log
 .pytest_cache/
